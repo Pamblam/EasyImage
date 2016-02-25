@@ -6,7 +6,7 @@
  * @package EasyImage
  * @author Robert Parham
  * @license wtfpl.net WTFPL
- * @version 2.4
+ * @version 2.5
  */
 
 class EasyImage{
@@ -61,7 +61,7 @@ class EasyImage{
 	
 	/***************************************************************************
 	 ************************** ANIMATED GIF PROPERTIES ************************
-	 ************************************************************************/
+	 **************************************************************************/
 	private $gif_sources;				// Array of EasyImage instances for each frame
 	private $gif_delayTimes;			// Array of delay times for each frame
 	private $gif_loops=0;				// How many times to loop animation
@@ -69,6 +69,15 @@ class EasyImage{
 	private $gif_transRed=0;			// Transparent red
 	private $gif_transGreen=0;			// Transparent green
 	private $gif_transBlue=0;			// Transparent blue
+	
+	/***************************************************************************
+	 ****************************** PSD PROPERTIES *****************************
+	 **************************************************************************/
+	private static $psd_infoArray;		// PSD file data
+    private static $psd_fp;				// PSD File pointer
+    private static $psd_fn;				// PSD filename
+    private static $psd_tempname;		// PSD temp filename
+    private static $psd_cbLength;		// PSD color bytes length
 	
 	/***************************************************************************
 	 *************************** PUBLIC CONSTRUCTOR ****************************
@@ -88,9 +97,10 @@ class EasyImage{
 					$return = self::createAnimatedGIF($args[0]);
 				else if(filter_var($args[0], FILTER_VALIDATE_URL))
 					$return = self::createFromURL($args[0]);
-				else if(file_exists($args[0]))
-					$return = self::createFromFile($args[0]);
-				else $return = self::createFromBase64($args[0]);
+				else if(file_exists($args[0])){
+					if(strpos(strtoupper(mime_content_type($args[0])), "PHOTOSHOP") !== false) $return = self::createFromPSD($args[0]);
+					else $return = self::createFromFile($args[0]);
+				}else $return = self::createFromBase64($args[0]);
 				break;
 			case(2):
 				if(is_array($args[0])) $return = self::createAnimatedGIF($args[0], $args[1]);
@@ -135,6 +145,14 @@ class EasyImage{
 	 * @return type
 	 */
 	public function borderRadius($radius=10, $colour="#FFFFFF"){
+		
+		// If it's a gif, apply to each
+		if(is_array($this->gif_sources)){
+			foreach($this->gif_sources as $img)
+				$img->borderRadius($radius=10, $colour);
+			return $this;
+		}
+		
 		$source_width = $this->width;
 		$source_height = $this->height;		
 		$corner_image = imagecreatetruecolor($radius, $radius);
@@ -152,6 +170,36 @@ class EasyImage{
 		imagecopymerge($this->image, $corner_image, $source_width - $radius, $source_height - $radius, 0, 0, $radius, $radius, 100);
 		$corner_image = imagerotate($corner_image, 90, 0);
 		imagecopymerge($this->image, $corner_image, $source_width - $radius, 0, 0, 0, $radius, $radius, 100);
+		
+		return $this;
+	}
+	
+	/**
+	 * Merge two images
+	 * @param type $src
+	 * @param type $dst_x
+	 * @param type $dst_y
+	 * @param type $src_x
+	 * @param type $src_y
+	 * @param type $src_w
+	 * @param type $src_h
+	 * @param type $pct
+	 * @return \EasyImage
+	 */
+	public function mergeImages($src, $dst_x=0, $dst_y=0, $src_x=0, $src_y=0, $src_w=null, $src_h=null, $pct=50){
+		
+		// If it's a gif, apply to each
+		if(is_array($this->gif_sources)){
+			foreach($this->gif_sources as $img)
+				$img->mergeImages($src, $dst_x, $dst_y, $src_x, $src_y, $src_w, $src_h, $pct);
+			return $this;
+		}
+		
+		if(!is_object($src)) $src = EasyImage::Create($src);
+		if(empty($src_w)) $src_w = $src->getWidth();
+		if(empty($src_h)) $src_h = $src->getWidth();
+		
+		imagecopymerge($this->image, $src->getImageResource(), $dst_x, $dst_y, $src_x, $src_y, $src_w, $src_h, $pct);
 		
 		return $this;
 	}
@@ -405,6 +453,8 @@ class EasyImage{
 		}
 		
 		imagealphablending($this->image, false);
+		imagesavealpha($this->image, true);
+		
 		$image_width = imagesx($this->image);
 		$image_height = imagesy($this->image);
 		
@@ -519,13 +569,19 @@ class EasyImage{
 			return $this;
 		}
 		
+		//echo $this; exit;
+		
 		// Resize the image
 		$thumb = imagecreatetruecolor($width, $height);
-		imagealphablending($thumb, false);
+		imagealphablending($thumb, true);
 		imagesavealpha($thumb, true);
-		imagecopyresampled($thumb, $this->image, 0, 0, 0, 0, $width, $height, $this->width, $this->height);
+		$transparent = imagecolorallocatealpha($thumb, 255, 255, 255, 127);
+		imagefill($thumb, 0, 0, $transparent);
 		
+		imagecopyresampled($thumb, $this->image, 0, 0, 0, 0, $width, $height, $this->width, $this->height);
+
 		$this->image = $thumb;
+		
 		$this->width = $width;
 		$this->height = $height;
 		
@@ -1428,7 +1484,15 @@ class EasyImage{
 	 * @return string - raw image data
 	 */
 	public function getString($output_mimetype = null){
-		return base64_decode(preg_replace('#^data:image/\w+;base64,#i', '', $this->getBase64($output_mimetype)));
+		if(is_array($this->gif_sources)){
+			return $this->encodeGIF();
+		}
+
+		// Get output details
+		list($mimetype, $funct, $compression) = $this->getOutputDetails($output_mimetype);
+		ob_start();
+		$funct($this->image, null, $compression);
+		return ob_get_clean();
 	}
 	
 	/**
@@ -1710,6 +1774,20 @@ class EasyImage{
 	}
 	
 	/**
+	 * Create an image from a PhotoShop file
+	 * @param type $filename
+	 * @return \EasyImage
+	 * @access private
+	 * @static
+	 */
+	private static function createFromPSD($filename){
+		ob_start();
+		imagepng(self::psdReader($filename), null, 9);
+		$b64 = base64_encode(ob_get_clean());
+		return EasyImage::Create($b64);
+	}
+	
+	/**
 	 * Create an image from a local image file
 	 * @param string $filepath - path to image file to use
 	 * @param bool $temp - is it a temporary image?
@@ -1896,7 +1974,7 @@ class EasyImage{
 		// Drop it on the background, if there is one
 		if(!empty($background)){
 			
-			// if the backgground is a filepath or url
+			// if the background is a filepath or url
 			if(is_string($background) && false !== @file_get_contents($background, false, null, 0, 10)){ 
 				$bg = EasyImage::Create($background)
 					->tile($image_width, $image_height);
@@ -2054,7 +2132,7 @@ class EasyImage{
 			$BUF[] = $sources[$i]->getString(self::GIF);
 
 			if (substr($BUF[$i], 0, 6) != "GIF87a" && substr($BUF[$i], 0, 6) != "GIF89a")
-				die("Source is not a GIF image!");
+				die("Source is not a GIF image! '".substr($BUF[$i], 0, 6)."'");
 
 			for ($j = (13 + 3 * (2 << (ord($BUF[$i] {10}) & 0x07))), $k = TRUE; $k; $j++) {
 				switch ($BUF[$i] {$j}) {
@@ -2270,8 +2348,9 @@ class EasyImage{
 	 * @ignore
 	 */
 	private function getOutputDetails($output_mimetype=null){
+		
 		switch(strtoupper($output_mimetype)){
-			case(self::JPG):
+			case(strtoupper(self::JPG)):
 			case('JPG'):
 			case('JPEG'):
 				$mimetype = self::JPG;
@@ -2279,13 +2358,13 @@ class EasyImage{
 				$compression = 100;
 				break;
 			case('PNG'):
-			case(self::PNG):
+			case(strtoupper(self::PNG)):
 				$mimetype = self::PNG;
 				$funct = 'imagepng';
 				$compression = 9;
 				break;
 			case('GIF'):
-			case(self::GIF):
+			case(strtoupper(self::GIF)):
 				$mimetype = self::GIF;
 				$funct = 'imagegif';
 				$compression = null;
@@ -2391,13 +2470,216 @@ class EasyImage{
 	private static function Error($msg){
 		throw new Exception('Image error: '.$msg);
 	}
-	
+
 	/***************************************************************************
-	 ***************************************************************************
+	 ******************************* PSD METHODS *******************************
+	 **************************************************************************/
+	
+	/**
+	 * Get an image resource from a PSD file
+	 * @ignore
+	 */
+	private static function psdReader($fileName){
+		set_time_limit(0);
+		self::$psd_infoArray = array();
+		self::$psd_fn = $fileName;
+		self::$psd_fp = fopen(self::$psd_fn, 'r');
+		if(fread(self::$psd_fp, 4) == '8BPS'){
+			self::$psd_infoArray['version id'] = self::psd_getInteger(2);
+			fseek(self::$psd_fp, 6, SEEK_CUR); // 6 bytes of 0's
+			self::$psd_infoArray['channels'] = self::psd_getInteger(2);
+			self::$psd_infoArray['rows'] = self::psd_getInteger(4);
+			self::$psd_infoArray['columns'] = self::psd_getInteger(4);
+			self::$psd_infoArray['colorDepth'] = self::psd_getInteger(2);
+			self::$psd_infoArray['colorMode'] = self::psd_getInteger(2);
+			self::$psd_infoArray['colorModeDataSectionLength'] = self::psd_getInteger(4);
+			fseek(self::$psd_fp, self::$psd_infoArray['colorModeDataSectionLength'], SEEK_CUR); 
+			self::$psd_infoArray['imageResourcesSectionLength'] = self::psd_getInteger(4);
+			fseek(self::$psd_fp, self::$psd_infoArray['imageResourcesSectionLength'], SEEK_CUR); 
+			self::$psd_infoArray['layerMaskDataSectionLength'] = self::psd_getInteger(4);
+			fseek(self::$psd_fp, self::$psd_infoArray['layerMaskDataSectionLength'], SEEK_CUR); 
+			self::$psd_infoArray['compressionType'] = self::psd_getInteger(2);
+			self::$psd_infoArray['oneColorChannelPixelBytes'] = self::$psd_infoArray['colorDepth'] / 8;
+			self::$psd_cbLength = self::$psd_infoArray['rows'] * self::$psd_infoArray['columns'] * self::$psd_infoArray['oneColorChannelPixelBytes'];
+			if(self::$psd_infoArray['colorMode'] == 2){
+				self::$psd_infoArray['error'] = 'images with indexed colours are not supported yet';
+				return false;
+			}
+		}
+		else{
+			self::$psd_infoArray['error'] = 'invalid or unsupported psd';
+			return false;
+		}
+		
+		if(isset(self::$psd_infoArray['error'])) self::Error(self::$psd_infoArray['error']);
+
+		switch(self::$psd_infoArray['compressionType']){
+			case 1:
+				self::$psd_infoArray['scanLinesByteCounts'] = array();
+				for($i = 0; $i < (self::$psd_infoArray['rows'] * self::$psd_infoArray['channels']); $i++) self::$psd_infoArray['scanLinesByteCounts'][] = self::psd_getInteger(2);
+				self::$psd_tempname = tempnam(realpath('/tmp'), 'decompressedImageData');
+				$tfp = fopen(self::$psd_tempname, 'wb');
+				foreach(self::$psd_infoArray['scanLinesByteCounts'] as $scanLinesByteCount){
+					fwrite($tfp, self::psd_getPackedBitsDecoded(fread(self::$psd_fp, $scanLinesByteCount)));
+				}
+				fclose($tfp);
+				fclose(self::$psd_fp);
+				self::$psd_fp = fopen(self::$psd_tempname, 'r');
+			default:
+				break;
+		}
+		$image = imagecreatetruecolor(self::$psd_infoArray['columns'], self::$psd_infoArray['rows']);
+		for($rowPointer = 0; ($rowPointer < self::$psd_infoArray['rows']); $rowPointer++){
+			for($columnPointer = 0; ($columnPointer < self::$psd_infoArray['columns']); $columnPointer++){
+				switch(self::$psd_infoArray['colorMode']){
+					case 2:
+						exit;
+						break;
+					case 0:
+						if($columnPointer == 0) $bitPointer = 0;
+						if($bitPointer == 0) $currentByteBits = str_pad(base_convert(bin2hex(fread(self::$psd_fp, 1)), 16, 2), 8, '0', STR_PAD_LEFT);
+						$r = $g = $b = (($currentByteBits[$bitPointer] == '1') ? 0 : 255);
+						$bitPointer++;
+						if($bitPointer == 8) $bitPointer = 0;
+						break;
+					case 1:
+					case 8:
+						$r = $g = $b = self::psd_getInteger(self::$psd_infoArray['oneColorChannelPixelBytes']);
+						break;
+					case 4:
+						$c = self::psd_getInteger(self::$psd_infoArray['oneColorChannelPixelBytes']);
+						$currentPointerPos = ftell(self::$psd_fp);
+						fseek(self::$psd_fp, self::$psd_cbLength - 1, SEEK_CUR);
+						$m = self::psd_getInteger(self::$psd_infoArray['oneColorChannelPixelBytes']);
+						fseek(self::$psd_fp, self::$psd_cbLength - 1, SEEK_CUR);
+						$y = self::psd_getInteger(self::$psd_infoArray['oneColorChannelPixelBytes']);
+						fseek(self::$psd_fp, self::$psd_cbLength - 1, SEEK_CUR);
+						$k = self::psd_getInteger(self::$psd_infoArray['oneColorChannelPixelBytes']);
+						fseek(self::$psd_fp, $currentPointerPos);
+						$r = round(($c * $k) / (pow(2, self::$psd_infoArray['colorDepth']) - 1));
+						$g = round(($m * $k) / (pow(2, self::$psd_infoArray['colorDepth']) - 1));
+						$b = round(($y * $k) / (pow(2, self::$psd_infoArray['colorDepth']) - 1));
+						break;
+					case 9:
+						$l = self::psd_getInteger(self::$psd_infoArray['oneColorChannelPixelBytes']);
+						$currentPointerPos = ftell(self::$psd_fp);
+						fseek(self::$psd_fp, self::$psd_cbLength - 1, SEEK_CUR);
+						$a = self::psd_getInteger(self::$psd_infoArray['oneColorChannelPixelBytes']);
+						fseek(self::$psd_fp, self::$psd_cbLength - 1, SEEK_CUR);
+						$b = self::psd_getInteger(self::$psd_infoArray['oneColorChannelPixelBytes']);
+						fseek(self::$psd_fp, $currentPointerPos);
+						$r = $l;
+						$g = $a;
+						$b = $b;
+						break;
+					default:
+						$r = self::psd_getInteger(self::$psd_infoArray['oneColorChannelPixelBytes']);
+						$currentPointerPos = ftell(self::$psd_fp);
+						fseek(self::$psd_fp, self::$psd_cbLength - 1, SEEK_CUR);
+						$g = self::psd_getInteger(self::$psd_infoArray['oneColorChannelPixelBytes']);
+						fseek(self::$psd_fp, self::$psd_cbLength - 1, SEEK_CUR);
+						$b = self::psd_getInteger(self::$psd_infoArray['oneColorChannelPixelBytes']);
+						fseek(self::$psd_fp, $currentPointerPos);
+						break;
+				}
+				if((self::$psd_infoArray['oneColorChannelPixelBytes'] == 2)){
+					$r = $r >> 8;
+					$g = $g >> 8;
+					$b = $b >> 8;
+				}
+				elseif((self::$psd_infoArray['oneColorChannelPixelBytes'] == 4)){
+					$r = $r >> 24;
+					$g = $g >> 24;
+					$b = $b >> 24;
+				}
+				$pixelColor = imagecolorallocate($image, $r, $g, $b);
+				imagesetpixel($image, $columnPointer, $rowPointer, $pixelColor);
+			}
+		}
+		fclose(self::$psd_fp);
+		if(isset(self::$psd_tempname)) unlink(self::$psd_tempname);
+		return $image;
+	}
+	
+	/**
+	 * @ignore
+	 */
+	private static function psd_getPackedBitsDecoded($string){
+		$stringPointer = 0;
+		$returnString = '';
+		while(1){
+			if(isset($string[$stringPointer])) $headerByteValue = self::psd_unsignedToSigned(hexdec(bin2hex($string[$stringPointer])), 1);
+			else return $returnString;
+			$stringPointer++;
+			if($headerByteValue >= 0){
+				for($i = 0; $i <= $headerByteValue; $i++){
+					$returnString .= $string[$stringPointer];
+					$stringPointer++;
+				}
+			}
+			else{
+				if($headerByteValue != -128){
+					$copyByte = $string[$stringPointer];
+					$stringPointer++;
+					for($i = 0; $i < (1 - $headerByteValue); $i++){
+						$returnString .= $copyByte;
+					}
+				}
+			}
+		}
+	}
+	
+	/**
+	 * @ignore
+	 */
+	private static function psd_unsignedToSigned($int, $byteSize = 1){
+		switch($byteSize){
+			case 1:
+				if($int < 128) return $int;
+				else return -256 + $int;
+				break;
+			case 2:
+				if($int < 32768) return $int;
+				else return -65536 + $int;
+			case 4:
+				if($int < 2147483648) return $int;
+				else return -4294967296 + $int;
+			default:
+				return $int;
+		}
+	}
+	
+	/**
+	 * @ignore
+	 */
+	private static function psd_hexReverse($hex){
+		$output = '';
+		if(strlen($hex) % 2) return false;
+		for($pointer = strlen($hex); $pointer >= 0; $pointer-=2) $output .= substr($hex, $pointer, 2);
+		return $output;
+	}
+	
+	/**
+	 * @ignore
+	 */
+	private static function psd_getInteger($byteCount = 1){
+		switch($byteCount){
+			case 4:
+				// for some strange reason this is still broken...
+				return @reset(unpack('N', fread(self::$psd_fp, 4)));
+				break;
+
+			case 2:
+				return @reset(unpack('n', fread(self::$psd_fp, 2)));
+				break;
+
+			default:
+				return hexdec(self::psd_hexReverse(bin2hex(fread(self::$psd_fp, $byteCount))));
+		}
+	}
+
+	/***************************************************************************
 	 ******************************* PDF METHODS *******************************
-	 *****************  Don't change anything below this line ******************
-	 ************ Most functions below this line forked from FPDF **************
-	 ***************************************************************************
 	 **************************************************************************/
 
 	/**
