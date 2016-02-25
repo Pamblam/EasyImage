@@ -68,6 +68,7 @@ _as_
 *   Sketch Filter
 *   Vignette
 *   Map Alpha Layer
+*   Mask Color
 
 **Get Image Info**:
 

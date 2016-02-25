@@ -194,6 +194,7 @@
 										<li><a href='#sketch'>Sketch Filter</a></li>
 										<li><a href='#vignette'>Vignette</a></li>
 										<li><a href='#alphaMap'>Map Alpha Layer</a></li>
+										<li><a href='#colorMask'>Color Mask</a></li>
 									</ul><br>
 								</p>
 							</td>
@@ -892,6 +893,22 @@
 								<li><b>$level</b> - <i>int</i> New smoothness level</li>
 							</ul>
 							<pre>echo EasyImage::Create($file)->adjustSmoothness(10);</pre>
+						</div>
+					</div>
+					
+					<br id="colorMask">
+					<div class="panel panel-default">
+						<div class="panel-heading">
+							<h4>Color Mask</h4>
+						</div>
+						<div class="panel-body">
+							<div class="panel panel-default">
+								<div class="panel-body"><big>colorMask( $MaskHexColor )</big></div>
+							</div>
+							<ul>
+								<li><b>$MaskHexColor</b> - <i>string</i> A hex color</li>
+							</ul>
+							<pre>echo EasyImage::Create($file)->colorMask("#FF000");</pre>
 						</div>
 					</div>
 					

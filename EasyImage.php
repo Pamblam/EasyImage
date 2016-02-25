@@ -474,6 +474,40 @@ class EasyImage{
 	}
 	
 	/**
+	 * Remove all colors EXCEPT the provided one
+	 * @param string $MaskHexColor - color in HEX format
+	 * @return \EasyImage
+	 */
+	public function colorMask($MaskHexColor){
+		// If it's a gif, apply to each
+		if(is_array($this->gif_sources)){
+			foreach($this->gif_sources as $img)
+				$img->colorMask($MaskHexColor);
+			return $this;
+		}
+		
+		imagealphablending($this->image, false);
+		imagesavealpha($this->image, true);
+		
+		$image_width = imagesx($this->image);
+		$image_height = imagesy($this->image);
+		
+		for($x = $image_width; $x--;){
+			for($y = $image_height; $y--;){
+				
+				$color = self::getPixelRGBA($x, $y);
+				$color = self::RGBToHex($color);
+				
+				if($color !== $MaskHexColor){
+					$newColor = imagecolorallocatealpha($this->image, 0, 0, 0, 127);
+					imagesetpixel($this->image, $x, $y, $newColor);
+				}
+			}
+		}
+		return $this;
+	}
+	
+	/**
 	 * Replaces colors in an image
 	 * @param string $oldColor - color in HEX format
 	 * @param string $newColor - color in HEX format
@@ -1710,6 +1744,7 @@ class EasyImage{
 	 * @access private
 	 */
 	private function __construct($fp, $isTemp, $loops=0, $disposal=2, $transRed=0, $transGreen=0, $transBlue=0){
+		set_time_limit(0);
 		if(!is_array($fp)){
 			if(empty($isTemp)) $isTemp = false;
 			
@@ -2480,7 +2515,6 @@ class EasyImage{
 	 * @ignore
 	 */
 	private static function psdReader($fileName){
-		set_time_limit(0);
 		self::$psd_infoArray = array();
 		self::$psd_fn = $fileName;
 		self::$psd_fp = fopen(self::$psd_fn, 'r');
