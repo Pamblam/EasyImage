@@ -1960,29 +1960,30 @@ class EasyImage{
 			$text = self::wrapText($font_size, $font_file, $text, $wrap_width);		
 		
 		// Retrieve bounding box:
-		$type_space = imagettfbbox($font_size, 0, $font_file, $text);
-
-		// Determine image width and height, 10 pixels are added for 5 pixels padding:
-		$image_width = abs($type_space[4] - $type_space[0]) + ($padding*2);
-		$image_height = abs($type_space[5] - $type_space[1]) + ($padding*2);
-		$line_height = self::getLineHeight($font_size, $font_file) + ($padding*2);
+		$bbox = imagettfbbox($font_size, 0, $font_file, $text);
 		
+		// Determine image width and height, plus padding:
+		$baseline = abs($bbox[7]);
+		$descent = abs($bbox[1]);
+		$image_width = abs($bbox[0])+abs($bbox[2]) + ($padding*2);
+		$image_height = $baseline+$descent + ($padding*2);
+
 		// Create image
 		$image = imagecreatetruecolor($image_width, $image_height);
-		imagealphablending($image, false);
-		imagesavealpha($image, true);
 		$white = imagecolorallocate($image, 255, 255, 255);
 		imagefill($image, 0, 0, $white);
-
-		// black for the text
+		imagealphablending($image, false);
+		imagesavealpha($image, true);
+		
+		//black for the text
 		$black = imagecolorallocate($image, 0, 0, 0);
 		
 		// Fix starting x and y coordinates for the text:
-		$x = $padding; // Padding of 5 pixels.
-		$y = $line_height - $padding; // So that the text is vertically centered.
-
+		$x = $bbox[0] + $padding;
+		$y = $baseline + $padding;
+		
 		// Add TrueType text to image:
-		imagettftext($image, $font_size, 0, $x, $y, $black, $font_file, $text);
+		imagettftext($image, $font_size, 0, $x, $y, $black, $font_file, $text);		
 		
 		// Save the image to a temp png file to use in our constructor
 		$tmpname = tempnam('/tmp', 'IMG');
@@ -1993,7 +1994,6 @@ class EasyImage{
 		// Get an instance of the class
 		$img = EasyImage::createFromFile($tmpname, true)
 			->removeTransparency()
-			->crop($image_width, $image_height)
 			->blackAndWhite();
 		
 		// the background is white, text is black at this point
