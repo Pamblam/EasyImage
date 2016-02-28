@@ -2,7 +2,7 @@
 
 **By:** Robert Parham | 
 **License:** wtfpl.net WTFPL | 
-**Version:** 2.5
+**Version:** 2.7
 
 Easy image is an easy to use image manipulation library written entirely in PHP and implemented in a single PHP class. It's intended to be used where ImageMagick is not available, and works on PHP 5.3 and up. It can be used to edit, apply filters, resize, animate, convert and get information about images in several formats.
 
@@ -69,6 +69,7 @@ _as_
 *   Vignette
 *   Map Alpha Layer
 *   Mask Color
+*	Add Perspective
 
 **Get Image Info**:
 
@@ -86,6 +87,7 @@ _as_
 *   Base 64 String
 *   Raw Image Data
 *   Make a Copy
+*   Unique Color
 
 **Utilities & Helpers**:
 

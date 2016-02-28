@@ -6,9 +6,10 @@
  * @package EasyImage
  * @author Robert Parham
  * @license wtfpl.net WTFPL
- * @version 2.5
+ * @version 2.7
  */
 
+set_time_limit(0);
 class EasyImage{
 	
 	/***************************************************************************
@@ -25,8 +26,8 @@ class EasyImage{
 	const RIGHT = "right";				// Position constant
 	const TOP = "top";					// Position constant
 	const BOTTOM = "bottom";			// Position constant
-	const CENTER = "center";			// Position constant
-	const FILL = "fill";				// Fill/cover constant
+	const CENTER = "center";				// Position constant
+	const FILL = "fill";					// Fill/cover constant
 	const COVER = "cover";				// Fill/cover constant
 	
 	/***************************************************************************
@@ -58,18 +59,19 @@ class EasyImage{
 	private $pdf_ColorFlag = false;		// indicates whether fill and text colors are different
 	private $pdf_images = array();		// array of used images
 	private $pdf_WithAlpha = false;		// has an alpha channel
+	private $pdf_InFooter = false;		// in footer
 	
 	/***************************************************************************
 	 ************************** ANIMATED GIF PROPERTIES ************************
 	 **************************************************************************/
 	private $gif_sources;				// Array of EasyImage instances for each frame
 	private $gif_delayTimes;			// Array of delay times for each frame
-	private $gif_loops=0;				// How many times to loop animation
-	private $gif_disposal=2;			// Gif disposal
-	private $gif_transRed=0;			// Transparent red
-	private $gif_transGreen=0;			// Transparent green
-	private $gif_transBlue=0;			// Transparent blue
-	
+	private $gif_loops = 0;				// How many times to loop animation
+	private $gif_disposal = 2;			// Gif disposal
+	private $gif_transRed = 0;			// Transparent red
+	private $gif_transGreen = 0;		// Transparent green
+	private $gif_transBlue = 0;			// Transparent blue
+
 	/***************************************************************************
 	 ****************************** PSD PROPERTIES *****************************
 	 **************************************************************************/
@@ -98,17 +100,25 @@ class EasyImage{
 				else if(filter_var($args[0], FILTER_VALIDATE_URL))
 					$return = self::createFromURL($args[0]);
 				else if(file_exists($args[0])){
-					if(strpos(strtoupper(mime_content_type($args[0])), "PHOTOSHOP") !== false) $return = self::createFromPSD($args[0]);
-					else $return = self::createFromFile($args[0]);
+					if(strpos(strtoupper(mime_content_type($args[0])), "PHOTOSHOP") !== false){ 
+						$return = self::createFromPSD($args[0]);
+					}else if(self::isAnimatedGif($args[0])){
+						$return = self::createFromAnimatedGif($args[0]);
+					}else{
+						$return = self::createFromFile($args[0]);
+					}
 				}else $return = self::createFromBase64($args[0]);
 				break;
 			case(2):
 				if(is_array($args[0])) $return = self::createAnimatedGIF($args[0], $args[1]);
 				else if(file_exists($args[0])) $return = createFromFile($args[0], $args[1]);
+				else if(is_numeric($args[0]) && is_numeric($args[1])) $return = self::createBlank($args[0], $args[1]);
 				else $return = self::createHTMLImage($args[0], $args[1]);
 				break;
 			case(3):
-				$return = self::createAnimatedGIF($args[0], $args[1], $args[2]);
+				if(is_array($args[0])) $return = self::createAnimatedGIF($args[0], $args[1], $args[2]);
+				else $return = self::createBlank($args[0], $args[1], $args[2]);
+				break;
 			case(4):
 				if(is_array($args[0])) $return = self::createAnimatedGIF($args[0], $args[1], $args[2], $args[3]);
 				else $return = self::createTextImage($args[0], $args[1], $args[2], $args[3]);
@@ -137,6 +147,96 @@ class EasyImage{
 	/***************************************************************************
 	 ***************************** EDITING METHODS *****************************
 	 **************************************************************************/
+	
+	/**
+	 * Add perspective to an image
+	 * @param float $gradient - gradient of perspective
+	 * @param type $rightdown - angle
+	 * @return \EasyImage
+	 */
+	public function perspective($gradient = 0.85, $rightdown="top"){
+		
+		// If it's a gif, apply to each
+		if(is_array($this->gif_sources)){
+			foreach($this->gif_sources as $img)
+				$img->perspective($gradient, $rightdown);
+			return $this;
+		}
+		
+		switch($rightdown){
+			case "top": $rightdown = 0; break;
+			case "bottom": $rightdown = 1; break;
+			case "left": $rightdown = 2; break;
+			case "right": $rightdown = 3; break;
+			default: $rightdown = 0; break;
+		}
+
+		$w = imagesx($this->image);
+		$h = imagesy($this->image);
+		$col = imagecolorallocatealpha($this->image, 0, 0, 0, 127);
+
+		$mult = 5;
+		$li = imagecreatetruecolor($w * $mult, $h * $mult);
+		imagealphablending($li, false);
+		imagefilledrectangle($li, 0, 0, $w * $mult, $h * $mult, $col);
+		imagesavealpha($li, true);
+
+		imagecopyresized($li, $this->image, 0, 0, 0, 0, $w * $mult, $h * $mult, $w, $h);
+		imagedestroy($this->image);
+		$w*=$mult;
+		$h*=$mult;
+
+		$image = imagecreatetruecolor($w, $h);
+		imagealphablending($image, false);
+		imagefilledrectangle($image, 0, 0, $w, $h, $col);
+		imagealphablending($image, true);
+
+		$test = $h * $gradient;
+		$naty = 0;
+		$natx = 0;
+
+		$rdmod = $rightdown % 2;
+		$min = 1;
+		if ($rightdown < 2){
+			for ($y = 0; $y < $h; $y++){
+				$ny = $rdmod ? $y : $h - $y;
+				$off = round((1 - $gradient) * $w * ($ny / $h));
+				$t = ((1 - pow(1 - pow(($ny / $h), 2), 0.5)) * (1 - $gradient) + ($ny / $h) * $gradient);
+				$nt = $rdmod ? $t : 1 - $t;
+				if (abs(0.5 - $nt) < $min){
+					$min = abs(0.5 - $nt);
+					$naty = $off;
+				}
+				imagecopyresampled($image, $li, round($off / 2), $y, 0, abs($nt * $h), $w - $off, 1, $w, 1);
+			}
+		}else{
+			for($x = 0; $x < $w; $x++){
+				$nx = $rdmod ? $x : $w - $x;
+				$off = round((1 - $gradient) * $h * ($nx / $w));
+				$t = ((1 - pow(1 - pow(($nx / $w), 2), 0.5)) * (1 - $gradient) + ($nx / $w) * $gradient);
+				$nt = $rdmod ? $t : 1 - $t;
+				if (abs(0.5 - $nt) < $min){
+					$min = abs(0.5 - $nt);
+					$natx = $off;
+				}
+				imagecopyresampled($image, $li, $x, round($off / 2), abs($nt * $w), 0, 1, $h - $off, 1, $h);
+			}
+		}
+		imagedestroy($li);
+		imagealphablending($image, false);
+		imagesavealpha($image, true);
+
+		$this->image = imagecreatetruecolor(($w + $naty) / $mult, ($h + $natx) / $mult);
+		imagealphablending($this->image, false);
+		imagefilledrectangle($this->image, 0, 0, ($w + $naty) / $mult, ($h + $natx) / $mult, $col);
+		imagealphablending($this->image, true);
+		imagecopyresampled($this->image, $image, 0, 0, 0, 0, ($w + $naty) / $mult, ($h + $natx) / $mult, $w, $h);
+		imagedestroy($image);
+		
+		imagealphablending($this->image, false);
+		imagesavealpha($this->image, true);
+		return $this;
+	}
 	
 	/**
 	 * Add a border radius
@@ -1316,6 +1416,14 @@ class EasyImage{
 	}
 	
 	/**
+	 * Get frames of gif
+	 * @return array|bool - array of gif sources or false if not gif
+	 */
+	public function getGifSources(){
+		return count($this->gif_sources) ? $this->gif_sources : false;
+	}
+	
+	/**
 	 * Get the image resource
 	 * @return resource - the image resource
 	 */
@@ -1547,9 +1655,55 @@ class EasyImage{
 		return self::Create($b);
 	}
 	
+	/**
+	 * Get a color that does not exist in the image
+	 * @param array $omit - an array of rgb array colors
+	 * @return int
+	 */
+	public function getUniqueColor($omit=array()){
+		if(!empty($this->gif_sources)) return false;
+		$colors = array_merge($omit, self::getColors());
+		$color = array('red'=>0, 'green'=>0, 'blue'=>0);
+		while(in_array($color, $colors)){
+			if($color['red'] < 255) $color['red']++;
+			else if($color['blue'] < 255) $color['blue']++;
+			else if($color['green'] < 255) $color['green']++;
+			else self::Error("There are no unique colors for this image. This image contains every color.");
+		}
+		return $color;
+	}
+	
 	/***************************************************************************
 	 *************************** UTILITIES & HELPERS ***************************
 	 **************************************************************************/
+	
+	/**
+	 * Determine if a gif is animated
+	 * @param string $image filename or raw image string
+	 * @return bool
+	 */
+	public static function isAnimatedGif($image){
+		// if it's a file, get the string
+		$raw = file_get_contents($image);
+		if($raw === false) $raw = $image;
+		$offset = 0;
+		$frames = 0;
+		
+		while($frames < 2){
+			$where1 = strpos($raw, "\x00\x21\xF9\x04", $offset);
+			if($where1 === false) break;
+			else{
+				$offset = $where1 + 1;
+				$where2 = strpos($raw, "\x00\x2C", $offset);
+				if($where2 === false) break;
+				else{
+					if($where1 + 8 == $where2) $frames ++;
+					$offset = $where2 + 1;
+				}
+			}
+		}
+		return $frames > 1;
+	}
 	
 	/**
 	 * Compare two different colors in different formats
@@ -1674,39 +1828,52 @@ class EasyImage{
 	}
 	
 	/**
-	 * Get all colors in a gradient between two colors
-	 * @param string $hex1 - the starting HEX color string
-	 * @param string $hex2 - the ending HEX oclor string
+	 * Get all colors in a gradient containing the given colors
+	 * @param array $colors - array of HEX color strings
 	 * @param int $steps - number of colors to return
 	 * @return array - array of colors in the gradient
 	 */
-	public static function gradientColors($HexFrom, $HexTo, $ColorSteps=10){
-		
-		$FromRGB = array();
-		list($FromRGB['r'], $FromRGB['g'], $FromRGB['b']) = self::hexToRGB($HexFrom);
-		
-		$ToRGB = array();
-		list($ToRGB['r'], $ToRGB['g'], $ToRGB['b']) = self::hexToRGB($HexTo);
-
-		$StepRGB['r'] = ($FromRGB['r'] - $ToRGB['r']) / ($ColorSteps - 1);
-		$StepRGB['g'] = ($FromRGB['g'] - $ToRGB['g']) / ($ColorSteps - 1);
-		$StepRGB['b'] = ($FromRGB['b'] - $ToRGB['b']) / ($ColorSteps - 1);
-
+	public static function gradientColors($colors, $ColorSteps=10){
 		$GradientColors = array();
-		$RGB = array();
-		$HexRGB = array();
+		$chunks = count($colors)-1;
 		
-		for($i = 0; $i <= $ColorSteps; $i++){
-			$RGB['r'] = floor($FromRGB['r'] - ($StepRGB['r'] * $i));
-			$RGB['g'] = floor($FromRGB['g'] - ($StepRGB['g'] * $i));
-			$RGB['b'] = floor($FromRGB['b'] - ($StepRGB['b'] * $i));
-
-			$HexRGB['red'] = sprintf('%02x', ($RGB['r']));
-			$HexRGB['green'] = sprintf('%02x', ($RGB['g']));
-			$HexRGB['blue'] = sprintf('%02x', ($RGB['b']));
+		$stepsPerChunk = intval($ColorSteps / $chunks);
+		$extra = $ColorSteps % $chunks;
+		$o=0;
+		for($n=0;$n<$chunks;$n++){
+			$steps = $stepsPerChunk;
+			if($n===0) $steps+= $extra;
 			
-			$val = implode("", $HexRGB);
-			if(strlen($val) == 6) $GradientColors[] = strtoupper("#$val");
+			$HexFrom = $colors[$n];
+			$HexTo = $colors[$n+1];
+			$ColorSteps = $steps+1;
+			
+			$FromRGB = array();
+			list($FromRGB['r'], $FromRGB['g'], $FromRGB['b']) = self::hexToRGB($HexFrom);
+
+			$ToRGB = array();
+			list($ToRGB['r'], $ToRGB['g'], $ToRGB['b']) = self::hexToRGB($HexTo);
+			$StepRGB['r'] = ($FromRGB['r'] - $ToRGB['r']) / ($ColorSteps - 1);
+			$StepRGB['g'] = ($FromRGB['g'] - $ToRGB['g']) / ($ColorSteps - 1);
+			$StepRGB['b'] = ($FromRGB['b'] - $ToRGB['b']) / ($ColorSteps - 1);
+			$clrs = array();
+			$RGB = array();
+			$HexRGB = array();
+
+			for($i = 0; $i < $ColorSteps; $i++){
+				$RGB['r'] = floor($FromRGB['r'] - ($StepRGB['r'] * $i));
+				$RGB['g'] = floor($FromRGB['g'] - ($StepRGB['g'] * $i));
+				$RGB['b'] = floor($FromRGB['b'] - ($StepRGB['b'] * $i));
+				$HexRGB['red'] = sprintf('%02x', ($RGB['r']));
+				$HexRGB['green'] = sprintf('%02x', ($RGB['g']));
+				$HexRGB['blue'] = sprintf('%02x', ($RGB['b']));
+
+				$val = implode("", $HexRGB);
+				if(strlen($val) == 6) $clrs[] = strtoupper("#$val");
+			}
+			
+			array_pop($clrs);
+			$GradientColors = array_merge($GradientColors, $clrs);
 		}
 		return $GradientColors;
 	}
@@ -1744,7 +1911,6 @@ class EasyImage{
 	 * @access private
 	 */
 	private function __construct($fp, $isTemp, $loops=0, $disposal=2, $transRed=0, $transGreen=0, $transBlue=0){
-		set_time_limit(0);
 		if(!is_array($fp)){
 			if(empty($isTemp)) $isTemp = false;
 			
@@ -1809,6 +1975,38 @@ class EasyImage{
 	}
 	
 	/**
+	 * Create a blank image with a solid or gradient background
+	 * @param int $width - width of image
+	 * @param int $height - height of image
+	 * @param array|string $bg array of bg colors for gradient or string for hex color
+	 * @return \EasyImage
+	 */
+	private static function createBlank($width, $height, $bg=null){
+		$im = imagecreatetruecolor($width, $height);
+		
+		if(is_array($bg)){
+			$colors = self::gradientColors($bg, imagesy($im));
+			for($x = 0; $x < imagesx($im); $x++){
+				for($y = 0; $y < imagesy($im); $y++){ 
+					$rgb = self::hexToRGB($colors[$y]);					
+					$color = imagecolorallocate($im, $rgb[0], $rgb[1], $rgb[2]);
+					imagesetpixel($im, $x, $y, $color);  
+				}
+			}
+		}else if(!empty($bg)){
+			if(is_string($bg)){
+				$rgb = self::hexToRGB($bg);
+				$color = imagecolorallocate($im, $rgb[0], $rgb[1], $rgb[2]);
+				imagefilledrectangle($im, 0, 0, $width, $height, $color);
+			}
+		}
+		
+		$tmpname = tempnam('/tmp', 'IMG');
+		imagepng($im, $tmpname, 9);
+		return new EasyImage($tmpname, true);
+	}
+	
+	/**
 	 * Create an image from a PhotoShop file
 	 * @param type $filename
 	 * @return \EasyImage
@@ -1847,6 +2045,21 @@ class EasyImage{
 		$tmpname = tempnam('/tmp', 'IMG');
 		imagepng($im, $tmpname, 9);
 		return new EasyImage($tmpname, true);
+	}
+	
+	/**
+	 * Create from an animated gif file
+	 * @param string $file- path to file
+	 * @return \EasyImage
+	 * @access private
+	 * @static
+	 */
+	private static function createFromAnimatedGif($file){
+		$frames = array();
+		$gifs = self::decodeGIF(file_get_contents($file));
+		foreach ($gifs['frames'] as $frame)
+			$frames[] = self::Create(base64_encode($frame));
+		return self::createAnimatedGIF($frames, $gifs['delays'], $gifs['loop'], $gifs['disposal'], $gifs['transr'], $gifs['transg'], $gifs['transb']);
 	}
 	
 	/**
@@ -1965,176 +2178,251 @@ class EasyImage{
 		// Determine image width and height, plus padding:
 		$baseline = abs($bbox[7]);
 		$descent = abs($bbox[1]);
-		$image_width = abs($bbox[0])+abs($bbox[2]) + ($padding*2);
+		$image_width = abs($bbox[0])+abs($bbox[2]) + ($padding*2) + 5; // for some reason we need a the extra 5 pixels
 		$image_height = $baseline+$descent + ($padding*2);
 
-		// Create image
-		$image = imagecreatetruecolor($image_width, $image_height);
-		$white = imagecolorallocate($image, 255, 255, 255);
-		imagefill($image, 0, 0, $white);
-		imagealphablending($image, false);
-		imagesavealpha($image, true);
+		// Dermine background type
+		if(is_string($background) && false !== @file_get_contents($background, false, null, 0, 10) || is_object($background))  $bgtype = "image";
+		else if(!empty($background)) $bgtype = "color";
+		else $bgtype = null;
 		
-		//black for the text
-		$black = imagecolorallocate($image, 0, 0, 0);
+		// If the background is a color, just create the color
+		if($bgtype == "color" || empty($bgtype)){
+			// Create image
+			$image = imagecreatetruecolor($image_width, $image_height);
+			
+			if($bgtype == "color"){
+				$rgb = self::hexToRGB($background);
+				$bgcolor = imagecolorallocate($image, $rgb[0], $rgb[1], $rgb[2]);
+			}else{
+				$bgcolor = imagecolorallocatealpha($image, 0, 0, 0, 127);
+			}
+			
+			imagefill($image, 0, 0, $bgcolor);
+			imagealphablending($image, false);
+			imagesavealpha($image, true);
+		}else{
+			if(!is_object($background)) $background = EasyImage::Create($background);
+			## Not sure why colorize() is required, but it seems to fix the problem
+			$image = $background->tile($image_width, $image_height)->colorize("#000000", 127)->getImageResource();
+			imagesavealpha($image, false);
+			imagealphablending($image, true);
+		}
+		
+		// Determine color type
+		if(is_string($color) && false !== @file_get_contents($color, false, null, 0, 10) || is_object($color))  $colortype = "image";
+		else $colortype = "color";
+		
+		// If it's a color, use the color, else make text transparent and lay the background image over another layer
+		if($colortype == "color"){
+			$rgb = self::hexToRGB($color);
+			$textcolor = imagecolorallocate($image, $rgb[0], $rgb[1], $rgb[2]);
+		}else{
+			if(!is_object($color)) $color = EasyImage::Create($color);
+			$color->tile($image_width, $image_height);
+			if($bgtype == "color"){
+				$rgb = self::hexToRGB($background);
+				$omitColors = array($omitColors, array("red"=>$rgb[0], "green"=>$rgb[1], "blue"=>$rgb[2]));
+			}else{
+				$omitColors = $background->getColors();
+			}
+			$rgba = $color->getUniqueColor($omitColors);
+			
+			$textcolor = imagecolorallocatealpha($image, $rgba['red'], $rgba['green'], $rgba['blue'], 127);
+		}
 		
 		// Fix starting x and y coordinates for the text:
 		$x = $bbox[0] + $padding;
 		$y = $baseline + $padding;
 		
 		// Add TrueType text to image:
-		imagettftext($image, $font_size, 0, $x, $y, $black, $font_file, $text);		
+		imagealphablending($image, true);
+		$z = imagettftext($image, $font_size, 0, $x, $y, $textcolor, $font_file, $text);		
+		
+		// If it's transparent
+		if($colortype == "image"){			
+			imagecolortransparent($image, $textcolor);
+			
+			imagealphablending($image, true);
+			imagesavealpha($image, false);
+			
+			imagecopymerge(
+				$color->getImageResource(), 
+				$image, 
+				0, 0, 0, 0, 
+				$image_width, $image_height, 100
+			);
+			
+			$image = $color->getImageResource();
+		}
 		
 		// Save the image to a temp png file to use in our constructor
 		$tmpname = tempnam('/tmp', 'IMG');
-		
-		// Generate and save image
 		imagepng($image, $tmpname, 9);
-		
-		// Get an instance of the class
-		$img = EasyImage::createFromFile($tmpname, true)
-			->removeTransparency()
-			->blackAndWhite();
-		
-		// the background is white, text is black at this point
-		$bgClr = "#FFFFFF";
-		$txtClr = "#000000"; 
-		
-		// if the text is white, change the white background to grey
-		if(self::compareColors("#FFFFFF", $color)){
-			$bgClr = "#CCCCCC";
-			$img->replaceColor("#FFFFFF", $bgClr);
-		}
-		
-		// Drop it on the background, if there is one
-		if(!empty($background)){
-			
-			// if the background is a filepath or url
-			if(is_string($background) && false !== @file_get_contents($background, false, null, 0, 10)){ 
-				$bg = EasyImage::Create($background)
-					->tile($image_width, $image_height);
-			}
-			
-			// if the background is an EasyImage instance
-			else if(is_object($background)){ 
-				$bg = $background
-					->tile($image_width, $image_height);
-			}
-			
-			// else assume it's a hex color
-			else{ 
-				$im = imagecreatetruecolor($image_width, $image_height);
-				$bgColor = self::getColorFromHex($im, $background, $alpha);
-				imagefill($im, 0, 0, $bgColor);
-				$tmpname = tempnam('/tmp', 'IMG');
-				imagepng($im, $tmpname, 9);
-				$bg = EasyImage::createFromFile($tmpname, true);
-			}
-			
-			// loop thru pixels and replace the background pixels
-			$src_w = $img->getWidth();
-			$src_h = $img->getHeight();
-			$image_width = $bg->getWidth();
-			$image_height = $bg->getHeight();
-			$src_x_pos = 0;
-			$src_y_pos = 0;
-			$overlaying = false;
-			for ($x=0; $x<$image_width; $x++) {
-				$src_y_pos = 0;
-				for ($y=0; $y<$image_height; $y++) {
-					$overlaying = 
-						$x >= 0			// are we to the right of $dst_x
-						&& $x < $src_w+0	// are we to the left of the far right pixel
-						&& $y >= 0			// are we above the bottom 
-						&& $y < $src_h+0;  // are we below the top
-					if($overlaying){
-						$tcolor = $img->getPixelRGBA($src_x_pos, $src_y_pos);
-						
-						// if this is a background pixel, change it
-						if(self::RGBToHex($tcolor) === $bgClr){ 
-							$bgcolor = $bg->getPixelRGBA($src_x_pos, $src_y_pos);
-							$newColor = imagecolorallocatealpha($img->getImageResource(), $bgcolor['red'], $bgcolor['green'], $bgcolor['blue'], 0);
-							imagesetpixel($img->getImageResource(), $x, $y, $newColor);
-						}
-						
-						$src_y_pos++;
-					}
-				}
-				if($overlaying) $src_x_pos++;
-			}
-		}
-		
-		// if there's no background, then remove the background color
-		else $img->removeColor($bgClr);
-		
-		/////////////////
-		// begin changing color of text
-		/////////////////
-		
-		// if the textcolor is a filepath or url
-		if(is_string($color) && false !== @file_get_contents($color, false, null, 0, 10)){ 
-			$txt = EasyImage::Create($color)
-				->tile($image_width, $image_height);
-		}
-
-		// if the textcolor is an EasyImage instance
-		else if(is_object($color)){ 
-			$txt = $color
-				->tile($image_width, $image_height);
-		}
-
-		// else assume it's a hex color
-		else{ 
-			$im = imagecreatetruecolor($image_width, $image_height);
-			$clr = self::getColorFromHex($im, $color, $alpha);
-			imagefill($im, 0, 0, $clr);
-			$tmpname = tempnam('/tmp', 'IMG');
-			imagepng($im, $tmpname, 9);
-			$txt = EasyImage::createFromFile($tmpname, true);
-		}
-
-		// loop thru pixels and replace the text pixels
-		$src_w = $img->getWidth();
-		$src_h = $img->getHeight();
-		$image_width = $txt->getWidth();
-		$image_height = $txt->getHeight();
-		$src_x_pos = 0;
-		$src_y_pos = 0;
-		$overlaying = false;
-		for ($x=0; $x<$image_width; $x++) {
-			$src_y_pos = 0;
-			for ($y=0; $y<$image_height; $y++) {
-				$overlaying = 
-					$x >= 0			// are we to the right of $dst_x
-					&& $x < $src_w+0	// are we to the left of the far right pixel
-					&& $y >= 0			// are we above the bottom 
-					&& $y < $src_h+0;  // are we below the top
-				if($overlaying){
-					$tcolor = $img->getPixelRGBA($src_x_pos, $src_y_pos);
-
-					// if this is a background pixel, change it
-					if(self::RGBToHex($tcolor) === $txtClr && 127 !== $tcolor['alpha']){ 
-						$clr = $txt->getPixelRGBA($src_x_pos, $src_y_pos);
-						$newColor = imagecolorallocatealpha($img->getImageResource(), $clr['red'], $clr['green'], $clr['blue'], 0);
-						imagesetpixel($img->getImageResource(), $x, $y, $newColor);
-					}
-
-					$src_y_pos++;
-				}
-			}
-			if($overlaying) $src_x_pos++;
-		}
-			
-		/////////////////
-		// end changing color of text
-		/////////////////
-		
-		return $img;
+		return EasyImage::createFromFile($tmpname, true);
 	}
 	
 	/***************************************************************************
 	 ***************************** PRIVATE METHODS *****************************
 	 **************************************************************************/
+	
+	/**
+	 * Decode a gif file
+	 * @param type $GIF_pointer
+	 * @return array of image content
+	 */
+	private static function decodeGIF($GIF_pointer){
+		$GIF_TransparentR = -1;
+		$GIF_TransparentG = -1;
+		$GIF_TransparentB = -1;
+		$GIF_TransparentI = 0;
+		$GIF_buffer = Array();
+		$GIF_delays = Array();
+		$GIF_dispos = Array();
+		$GIF_stream = "";
+		$GIF_string = "";
+		$GIF_anloop = 0;
+		$GIF_bfseek = 0;
+		$GIF_screen = Array();
+		$GIF_global = Array();
+		$GIF_sorted;
+		$GIF_colorS;
+		$GIF_colorC;
+		$GIF_colorF;
+		$GIF_arrays = array();
+	
+		$GIF_stream = $GIF_pointer;
+
+		self::GIFGetByte(6, $GIF_buffer, $GIF_bfseek, $GIF_stream);
+		self::GIFGetByte(7, $GIF_buffer, $GIF_bfseek, $GIF_stream);
+
+		$GIF_screen = $GIF_buffer;
+		$GIF_colorF = $GIF_buffer[4] & 0x80 ? 1 : 0;
+		$GIF_sorted = $GIF_buffer[4] & 0x08 ? 1 : 0;
+		$GIF_colorC = $GIF_buffer[4] & 0x07;
+		$GIF_colorS = 2 << $GIF_colorC;
+
+		if($GIF_colorF == 1){
+			self::GIFGetByte(3 * $GIF_colorS, $GIF_buffer, $GIF_bfseek, $GIF_stream);
+			$GIF_global = $GIF_buffer;
+		}
+		for($cycle = 1; $cycle;){
+			if(self::GIFGetByte(1, $GIF_buffer, $GIF_bfseek, $GIF_stream)){
+				switch($GIF_buffer[0]){
+					case 0x21:
+						self::GIFGetByte(1, $GIF_buffer, $GIF_bfseek, $GIF_stream);
+						if($GIF_buffer[0] == 0xff){
+							for(;;){
+								self::GIFGetByte(1, $GIF_buffer, $GIF_bfseek, $GIF_stream);
+								if(( $u = $GIF_buffer[0] ) == 0x00){
+									break;
+								}
+								self::GIFGetByte($u, $GIF_buffer, $GIF_bfseek, $GIF_stream);
+								if($u == 0x03){
+									$GIF_anloop = ( $GIF_buffer[1] | $GIF_buffer[2] << 8 );
+								}
+							}
+						}else{
+							for(;;){
+								self::GIFGetByte(1, $GIF_buffer, $GIF_bfseek, $GIF_stream);
+								if(( $u = $GIF_buffer[0] ) == 0x00){
+									break;
+								}
+								self::GIFGetByte($u, $GIF_buffer, $GIF_bfseek, $GIF_stream);
+								if($u == 0x04){
+									if(isset($GIF_buffer[4]) && $GIF_buffer[4] & 0x80){
+										$GIF_dispos[] = ( $GIF_buffer[0] >> 2 ) - 1;
+									}else{
+										$GIF_dispos[] = ( $GIF_buffer[0] >> 2 ) - 0;
+									}
+									$GIF_delays[] = ( $GIF_buffer[1] | $GIF_buffer[2] << 8 );
+									if($GIF_buffer[3]){
+										$GIF_TransparentI = $GIF_buffer[3];
+									}
+								}
+							}
+						}
+						break;
+					case 0x2C:
+						$GIF_screen_ = Array();
+						self::GIFGetByte(9, $GIF_buffer, $GIF_bfseek, $GIF_stream);
+						$GIF_screen_ = $GIF_buffer;
+						$GIF_colorF_ = $GIF_buffer[8] & 0x80 ? 1 : 0;
+						if($GIF_colorF_){
+							$GIF_code = $GIF_buffer[8] & 0x07;
+							$GIF_sort = $GIF_buffer[8] & 0x20 ? 1 : 0;
+						}else{
+							$GIF_code = $GIF_colorC;
+							$GIF_sort = $GIF_sorted;
+						}
+						$GIF_size = 2 << $GIF_code;
+						$GIF_screen[4] &= 0x70;
+						$GIF_screen[4] |= 0x80;
+						$GIF_screen[4] |= $GIF_code;
+						if($GIF_sort){
+							$GIF_screen[4] |= 0x08;
+						}
+						if($GIF_TransparentI){
+							$GIF_string = "GIF89a";
+						}else{
+							$GIF_string = "GIF87a";
+						}
+						self::GIFPutByte($GIF_screen, $GIF_string);
+						if($GIF_colorF_ == 1){
+							self::GIFGetByte(3 * $GIF_size, $GIF_buffer, $GIF_bfseek, $GIF_stream);
+							if($GIF_TransparentI){
+								$GIF_TransparentR = $GIF_buffer[3 * $GIF_TransparentI + 0];
+								$GIF_TransparentG = $GIF_buffer[3 * $GIF_TransparentI + 1];
+								$GIF_TransparentB = $GIF_buffer[3 * $GIF_TransparentI + 2];
+							}
+							self::GIFPutByte($GIF_buffer, $GIF_string);
+						}else{
+							if($GIF_TransparentI){
+								$GIF_TransparentR = $GIF_global[3 * $GIF_TransparentI + 0];
+								$GIF_TransparentG = $GIF_global[3 * $GIF_TransparentI + 1];
+								$GIF_TransparentB = $GIF_global[3 * $GIF_TransparentI + 2];
+							}
+							self::GIFPutByte($GIF_global, $GIF_string);
+						}
+						if($GIF_TransparentI){
+							$GIF_string .= "!\xF9\x04\x1\x0\x0" . chr($GIF_TransparentI) . "\x0";
+						}
+						$GIF_string .= chr(0x2C);
+						$GIF_screen_[8] &= 0x40;
+						self::GIFPutByte($GIF_screen_, $GIF_string);
+						self::GIFGetByte(1, $GIF_buffer, $GIF_bfseek, $GIF_stream);
+						self::GIFPutByte($GIF_buffer, $GIF_string);
+						for(;;){
+							self::GIFGetByte(1, $GIF_buffer, $GIF_bfseek, $GIF_stream);
+							self::GIFPutByte($GIF_buffer, $GIF_string);
+							if(( $u = $GIF_buffer[0] ) == 0x00){
+								break;
+							}
+							self::GIFGetByte($u, $GIF_buffer, $GIF_bfseek, $GIF_stream);
+							self::GIFPutByte($GIF_buffer, $GIF_string);
+						}
+						$GIF_string .= chr(0x3B);
+						$GIF_arrays[] = $GIF_string;
+						break;
+					case 0x3B:
+						$cycle = 0;
+						break;
+				}
+			}else{
+				$cycle = 0;
+			}
+		}
+		
+		return array(
+			"frames" => $GIF_arrays,
+			"delays" => $GIF_delays,
+			"disposal" => $GIF_dispos[0],
+			"loop" => $GIF_anloop,
+			"transr" => $GIF_TransparentR,
+			"transg" =>  $GIF_TransparentG,
+			"transb" => $GIF_TransparentB
+		);
+	}
 	
 	/**
 	 * Get gif image stream from gif files
@@ -2269,6 +2557,29 @@ class EasyImage{
 		}
 		$GIF .= ";";
 		return $GIF;
+	}
+	
+	/**
+	 * @ignore
+	 */
+	private static function GIFGetByte($len, &$GIF_buffer, &$GIF_bfseek, &$GIF_stream){
+		$GIF_buffer = Array();
+		for($i = 0; $i < $len; $i++){
+			if($GIF_bfseek > strlen($GIF_stream)){
+				return 0;
+			}
+			$GIF_buffer[] = ord($GIF_stream { $GIF_bfseek++});
+		}
+		return 1;
+	}
+
+	/**
+	 * @ignore
+	 */
+	private static function GIFPutByte($bytes, &$GIF_string){
+		foreach($bytes as $byte){
+			$GIF_string .= chr($byte);
+		}
 	}
 	
 	/**
@@ -2857,7 +3168,7 @@ class EasyImage{
 
 		// Flowing mode
 		if($y===null){
-			if($this->pdf_y+$h>$this->pdf_PageBreakTrigger && !$this->pdf_InHeader && !$this->pdf_InFooter && $this->pdf_AcceptPageBreak()){
+			if($this->pdf_y+$h>$this->pdf_PageBreakTrigger && !$this->pdf_InHeader && !$this->pdf_InFooter && $this->pdf_AutoPageBreak){
 				// Automatic page break
 				$x2 = $this->pdf_x;
 				$this->pdf_AddPage($this->pdf_CurOrientation,$this->pdf_CurPageSize,$this->pdf_CurRotation);
