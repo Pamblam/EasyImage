@@ -54,5 +54,5 @@ $reflection =
 # glue the reflection to the bottom
 $image->concat($reflection, EasyImage::VERT);
 
- echo "<pre>"; echo $image->getBase64(); exit;
+//echo "<pre>"; echo $image->getBase64(); exit;
 echo $image;
