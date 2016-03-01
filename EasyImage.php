@@ -76,11 +76,11 @@ class EasyImage{
 	 ****************************** PSD PROPERTIES *****************************
 	 **************************************************************************/
 	private static $psd_infoArray;		// PSD file data
-    private static $psd_fp;				// PSD File pointer
-    private static $psd_fn;				// PSD filename
-    private static $psd_tempname;		// PSD temp filename
-    private static $psd_cbLength;		// PSD color bytes length
-	
+	private static $psd_fp;				// PSD File pointer
+	private static $psd_fn;				// PSD filename
+	private static $psd_tempname;		// PSD temp filename
+	private static $psd_cbLength;		// PSD color bytes length
+
 	/***************************************************************************
 	 *************************** PUBLIC CONSTRUCTOR ****************************
 	 **************************************************************************/
