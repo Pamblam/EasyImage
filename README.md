@@ -16,9 +16,15 @@ The focus is on ease of use.
 * Output is a breeze too. To send the image to the browser simply echo the class instance, EasyImage will take care of headers and everything. There are also options to save the image locally or force it as a download.
 * Works on ancient versions of PHP
 
-## It's can do anything
+## It can do anything!
 (Almost...)
 * Reads and writes Animated gifs
 * Reads Photoshop project files (PSD)
 * Writes to PDF format
-* Resize, skew, layer, distort, replace colors, add watermarks, create text, create gradients, and a ton more.
+* Resize, skew, layer, distort, replace colors, add watermarks, create text, create gradients, and a ton more. 
+* Get information about the image such as size, mime type, a list of colors in the image, et cetera.
+* ~~Call and wish you a happy birthday.~~ *Feature still in beta*
+
+Be sure to check out the docs [here](http://geneticcoder.com/EasyImage/) or download the docs.html file to see the complete list of features and functionality.
+
+@todo - compile and add list of credits.
