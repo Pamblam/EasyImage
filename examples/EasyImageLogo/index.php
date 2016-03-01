@@ -10,14 +10,13 @@ require("../../EasyImage.php");
 # relative path
 $here = realpath(dirname(__FILE__));
 
-# http://www.1001freefonts.com/thick_deco.font
 $font = "$here/resources/outrider.ttf";
 
 # text to display
 $text = "EASYIMAGE";
 
 # get some colors to use
-$colors = EasyImage::gradientColors("#0AC2FF", "#47FF0A", strlen($text));
+$colors = EasyImage::gradientColors(array("#0AC2FF", "#47FF0A"), strlen($text));
 
 # generate some html
 $htmlColored = "";
@@ -36,10 +35,8 @@ $colored = EasyImage::Create($htmlColored, array("font"=>$font))->resize(500, 10
 # drop the black one behind the colored one to make a shadow
 $image->addOverlay($colored, 4, 7);
 
-# uncomment to show the "beta" part
-# create beta image
-$text = "<span style='color: #0AC2FF; font-size: 100; padding:10;'>BETA</span>";
-$textbg = "<span style='color: #000; font-size: 100; padding:10;'>BETA</span>";
+$text = "<span style='color: #0AC2FF; font-size: 100; padding:10;'>v2.7</span>";
+$textbg = "<span style='color: #000; font-size: 100; padding:10;'>v2.7</span>";
 $beta = EasyImage::Create($textbg, array("font"=>$font))->resize(150, 25);
 $foreground = EasyImage::Create($text, array("font"=>$font))->resize(150, 25);
 $beta->addOverlay($foreground, 2, 3);
@@ -57,5 +54,5 @@ $reflection =
 # glue the reflection to the bottom
 $image->concat($reflection, EasyImage::VERT);
 
-// echo "<pre>"; echo $image->getBase64(); exit;
+ echo "<pre>"; echo $image->getBase64(); exit;
 echo $image;

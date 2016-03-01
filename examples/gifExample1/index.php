@@ -11,10 +11,10 @@ $here = realpath(dirname(__FILE__));
 
 // Get colors red to green to blue
 $colors = array();
-$grad = EasyImage::gradientColors("#FF0000", "#00FF00", 20);
+$grad = EasyImage::gradientColors(array("#FF0000", "#00FF00"), 20);
 foreach($grad as $c) $colors[] = $c;
 array_pop($colors);
-$grad = EasyImage::gradientColors("#00FF00", "#FF0000", 20);
+$grad = EasyImage::gradientColors(array("#00FF00", "#FF0000"), 20);
 foreach($grad as $c) $colors[] = $c;
 array_pop($colors);
 

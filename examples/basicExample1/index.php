@@ -9,8 +9,7 @@ require("../../EasyImage.php");
 // Get paths to images and font
 $here = realpath(dirname(__FILE__));
 
-//$image = "$here/resources/cat.jpeg";
-$image = "http://dressacat.com/chat.png";
+$image = "$here/resources/cat.jpeg";
 
 $pencil = "$here/resources/pencil.png";
 $font_file = "$here/resources/OldStreetSigns.ttf";	
@@ -27,8 +26,7 @@ echo EasyImage::Create($image)
 	->flip()		// Flip the image
 	->rotate(22.5)	// Rotate it a little to look like paper
 	->transparentToColor("#fff") // Remove trnsparency from the rotated image
-	->crop(300, 400, 60, 55) // Crop the image a little more after the crop
-	->addWatermark("Made by Rob", 12, "#000", $font_file, "left", "top") // Add a watermark
+	->addWatermark("Made by Rob", 12, "#000", $font_file, EasyImage::RIGHT, EasyImage::TOP) // Add a watermark
 	->addOverlay(	// Add the image of the pencil
 		EasyImage::Create($pencil)->scale(175)->flip("b"), 
 		-25, 265
