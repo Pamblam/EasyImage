@@ -444,6 +444,15 @@ class EasyImage{
 			return $this;
 		}
 		
+		// If the cropped area is larger than the original image
+		if($this->height < $new_height+$y || $this->width < $new_width+$x){
+			$img = EasyImage::Create($new_width+$x, $new_height+$y)->addOverlay($this, 0, 0);
+			$this->image = $img->getImageResource();
+			$this->width = $img->getWidth();
+			$this->height = $img->getHeight();
+		}
+		
+		
 		$img = imagecrop($this->image, array(
 			"x" => $x, 
 			"y" => $y,
@@ -1983,6 +1992,8 @@ class EasyImage{
 	 */
 	private static function createBlank($width, $height, $bg=null){
 		$im = imagecreatetruecolor($width, $height);
+		imagealphablending($im, false);
+		imagesavealpha($im, true);
 		
 		if(is_array($bg)){
 			$colors = self::gradientColors($bg, imagesy($im));
@@ -1999,6 +2010,9 @@ class EasyImage{
 				$color = imagecolorallocate($im, $rgb[0], $rgb[1], $rgb[2]);
 				imagefilledrectangle($im, 0, 0, $width, $height, $color);
 			}
+		}else{
+			$color = imagecolorallocatealpha($im, 0, 0, 0, 127);
+			imagefilledrectangle($im, 0, 0, $width, $height, $color);
 		}
 		
 		$tmpname = tempnam('/tmp', 'IMG');
