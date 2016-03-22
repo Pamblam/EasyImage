@@ -395,6 +395,10 @@ class EasyImage{
 		imagesavealpha( $this->image, true );
 		
 		$src = $EasyImage->getImageResource();
+		
+		imagealphablending($src, true );
+		imagesavealpha($src, true );
+		
 		imagecopy($this->image, $src, $dst_x, $dst_y, 0, 0, $src_w, $src_h);
 		return $this;
 	}
@@ -450,21 +454,27 @@ class EasyImage{
 			$this->image = $img->getImageResource();
 			$this->width = $img->getWidth();
 			$this->height = $img->getHeight();
+			unset($img);
 		}
 		
-		
-		$img = imagecrop($this->image, array(
-			"x" => $x, 
-			"y" => $y,
-			"width" => $new_width,
-			"height" => $new_height
-		));
+		$clr = $this->getUniqueColor();
+		$img = imagecreatetruecolor($new_width, $new_height);
+		$color = imagecolorallocate($img, $clr['red'], $clr['green'], $clr['blue']);
+		imagecolortransparent($img, $color);
+		imagefilledrectangle($img, 0, 0, $new_width, $new_height, $color);
+	
+		imagealphablending($img, false);
+		imagesavealpha($img, true); 
+		imagecopy($img, $this->image, 0, 0, $x, $y, $new_width, $new_height);
 		
 		$this->height = $new_height;
 		$this->width = $new_width;
 		
 		if(false !== $img) $this->image = $img;
 		else self::Error("Could not crop image.");
+		
+		imagealphablending($this->image, false);
+		imagesavealpha($this->image, true);
 		
 		return $this;
 	}
@@ -1433,7 +1443,7 @@ class EasyImage{
 	}
 	
 	/**
-	 * Get the image resource
+	 * Get a clone of the image resource
 	 * @return resource - the image resource
 	 */
 	public function getImageResource(){
@@ -1446,7 +1456,23 @@ class EasyImage{
 			return $ret;
 		}
 		
-		return $this->image;
+		$copy = imagecreatetruecolor($this->width, $this->height);
+		
+		$clr = $this->getUniqueColor();
+		$color = imagecolorallocate($copy, $clr['red'], $clr['green'], $clr['blue']);
+		
+		
+		imagecolortransparent($copy, $color);
+		imagefilledrectangle($copy, 0, 0, $this->width, $this->height, $color);
+		
+		imagealphablending($copy, false);
+		imagesavealpha($copy, true);
+		
+		imagecopy($copy, $this->image, 0, 0, 0, 0, $this->width, $this->height);
+		imagealphablending($this->image, false);
+		imagesavealpha($this->image, true);
+		
+		return $copy;
 	}
 	
 	/**
@@ -1546,6 +1572,7 @@ class EasyImage{
 	 * @return int - color index of the pixel
 	 */
 	public function getPixelColorIndex($x, $y){
+		$x = abs($x); $y = abs($y);
 		// If it's a gif, return each
 		if(is_array($this->gif_sources)){
 			$ret = array();
@@ -1553,7 +1580,13 @@ class EasyImage{
 				array_push($ret, $img->getPixelColorIndex($x, $y));
 			return $ret;
 		}
-		return imagecolorat($this->image, $x, $y);
+		
+		try{
+			$r = imagecolorat($this->image, $x, $y);
+		}catch(Exception $e){
+			echo "<pre>"; debug_print_backtrace(); exit;
+		}
+		return $r;
 	}
 	
 	/**
@@ -2012,6 +2045,9 @@ class EasyImage{
 			}
 		}else{
 			$color = imagecolorallocatealpha($im, 0, 0, 0, 127);
+			imagecolortransparent($im, $color);
+			imagealphablending($im, false);
+			imagesavealpha($im, true);
 			imagefilledrectangle($im, 0, 0, $width, $height, $color);
 		}
 		

@@ -1,4 +1,4 @@
-<?php
+ <?php
 
 error_reporting(E_ALL);
 ini_set("display_errors", "1");
@@ -17,11 +17,11 @@ $font_file = "$here/resources/OldStreetSigns.ttf";
 // Create and output image of the cat
 echo EasyImage::Create($image)
 	->replaceColor("#94A070", "#BCF511", 30) // Replace some colors
-	->replaceColor("#15110E", "#C75602", 30)
-	->replaceColor("#D5C9B1", "#F2B63D", 30)
-	->replaceColor("#6B5C57", "#9E837A", 30)
-	->replaceColor("#322E2D", "#B36856", 30)
-	->replaceColor("#C9B18D", "#F5C071", 30)
+	//->replaceColor("#15110E", "#C75602", 30)
+	//->replaceColor("#D5C9B1", "#F2B63D", 30)
+	//->replaceColor("#6B5C57", "#9E837A", 30)
+	//->replaceColor("#322E2D", "#B36856", 30)
+	//->replaceColor("#C9B18D", "#F5C071", 30)
 	->autoCrop()	// Remove the extra whitespace
 	->flip()		// Flip the image
 	->rotate(22.5)	// Rotate it a little to look like paper
