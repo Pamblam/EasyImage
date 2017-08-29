@@ -1,10 +1,10 @@
-![EasyImage v2.7 Logo](http://geneticcoder.com/EasyImage/ea.png)
+![EasyImage v2.7 Logo](http://i.imgur.com/KXyFNq3.png)
 
 **By:** Robert Parham | 
 **License:** wtfpl.net WTFPL | 
 **Version:** 2.7
 
-[EasyImage](http://geneticcoder.com/EasyImage/) is an easy to use image manipulation library written entirely in PHP and implemented in a single PHP class.
+[EasyImage](http://i.imgur.com/KXyFNq3.png) is an easy to use image manipulation library written entirely in PHP and implemented in a single PHP class.
 
 ## It's Easy!
 The focus is on ease of use. 
@@ -25,6 +25,6 @@ The focus is on ease of use.
 * Get information about the image such as size, mime type, a list of colors in the image, et cetera.
 * ~~Call and wish you a happy birthday.~~ *Feature still in beta.*
 
-Be sure to check out the docs [here](http://geneticcoder.com/EasyImage/) or download the docs.html file to see the complete list of features and functionality.
+Be sure to check out the docs [here](http://pamblam.github.io/EasyImage/) to see the complete list of features and functionality.
 
 @todo - compile and add list of credits.
