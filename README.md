@@ -1,10 +1,12 @@
-![EasyImage v2.7 Logo](http://i.imgur.com/KXyFNq3.png)
+![EasyImage v2.8 Logo](https://i.imgur.com/Uj8V1YI.png)
 
 **By:** Robert Parham | 
 **License:** wtfpl.net WTFPL | 
-**Version:** 2.7
+**Version:** 2.8
 
-[EasyImage](http://i.imgur.com/KXyFNq3.png) is an easy to use image manipulation library written entirely in PHP and implemented in a single PHP class.
+[EasyImage](http://pamblam.github.io/EasyImage/) is an easy to use image manipulation library written entirely in PHP and implemented in a single PHP class.
+
+**This library is written for a tool that is hosted on a legacy system. Ideally, you should use a tool that implements ImageMagick.**
 
 ## It's Easy!
 The focus is on ease of use. 
@@ -26,5 +28,3 @@ The focus is on ease of use.
 * ~~Call and wish you a happy birthday.~~ *Feature still in beta.*
 
 Be sure to check out the docs [here](http://pamblam.github.io/EasyImage/) to see the complete list of features and functionality.
-
-@todo - compile and add list of credits.

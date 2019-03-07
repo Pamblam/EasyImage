@@ -6,7 +6,7 @@
  * @package EasyImage
  * @author Robert Parham
  * @license wtfpl.net WTFPL
- * @version 2.7
+ * @version 2.8
  */
 
 set_time_limit(0);
@@ -26,9 +26,13 @@ class EasyImage{
 	const RIGHT = "right";				// Position constant
 	const TOP = "top";					// Position constant
 	const BOTTOM = "bottom";			// Position constant
-	const CENTER = "center";				// Position constant
+	const CENTER = "center";			// Position constant
 	const FILL = "fill";					// Fill/cover constant
 	const COVER = "cover";				// Fill/cover constant
+	const TEXT_ALIGN_LEFT = 0;			// Left align text
+	const TEXT_ALIGN_RIGHT = 1;			// Right align text
+	const TEXT_ALIGN_CENTER = 2;		// Center align text
+	const TEXT_ALIGN_JUSTIFY = 3;		// Justify text
 	
 	/***************************************************************************
 	 **************************** IMAGE PROPERTIES *****************************
@@ -137,6 +141,9 @@ class EasyImage{
 				break;
 			case(8):
 				$return = self::createTextImage($args[0], $args[1], $args[2], $args[3], $args[4], $args[5], $args[6], $args[7]);
+				break;
+			case(9):
+				$return = self::createTextImage($args[0], $args[1], $args[2], $args[3], $args[4], $args[5], $args[6], $args[7], $args[8]);
 				break;
 			default:
 				self::Error("Incorrect parameter number for EasyImage::Create.");
@@ -2214,7 +2221,7 @@ class EasyImage{
 	 * @access private
 	 * @static
 	 */
-	private static function createTextImage($text, $font_size, $color, $font_file, $background=null, $wrap_width=false, $alpha=0, $padding=5){
+	private static function createTextImage($text, $font_size, $color, $font_file, $background=null, $wrap_width=false, $alpha=0, $padding=5, $align=0){
 		// Make sure font file exists
 		if(!file_exists($font_file)) self::Error("Font file does not exist: {$font_file}");
 		
@@ -2287,7 +2294,22 @@ class EasyImage{
 		
 		// Add TrueType text to image:
 		imagealphablending($image, true);
-		$z = imagettftext($image, $font_size, 0, $x, $y, $textcolor, $font_file, $text);		
+		
+		switch($align){
+			case self::TEXT_ALIGN_JUSTIFY:
+				self::imagettftextjustified($image, $font_size, $x, $y, $textcolor, $font_file, $text);
+				break;
+			case self::TEXT_ALIGN_CENTER:
+				self::imagettftextcenter($image, $font_size, $x, $y, $textcolor, $font_file, $text);
+				break;
+			case self::TEXT_ALIGN_RIGHT:
+				self::imagettftextright($image, $font_size, $x, $y, $textcolor, $font_file, $text);
+				break;
+			case self::TEXT_ALIGN_LEFT:
+			default:
+				imagettftext($image, $font_size, 0, $x, $y, $textcolor, $font_file, $text);
+				break;
+		}
 		
 		// If it's transparent
 		if($colortype == "image"){			
@@ -2315,6 +2337,193 @@ class EasyImage{
 	/***************************************************************************
 	 ***************************** PRIVATE METHODS *****************************
 	 **************************************************************************/
+	
+	/**
+	 * draw text to image with justified alignment
+	 * @param resource $image - image resource from imagecreatetruecolor()
+	 * @param number $size - font size in points
+	 * @param number $x - x coord
+	 * @param number $y - y coord
+	 * @param number $color - color index from imagecolorallocate()
+	 * @param type $fontfile - path to a font file
+	 * @param type $text - the text to be drawn
+	 * @return type - an array representing the bounding box
+	 */
+	private static function imagettftextjustified($image, $size, $x, $y, $color, $fontfile, $text){
+		// Get height of single line
+		$rect = imagettfbbox($size, 0, $fontfile, "Tq");
+		$minY = min(array($rect[1],$rect[3],$rect[5],$rect[7]));
+		$maxY = max(array($rect[1],$rect[3],$rect[5],$rect[7])); 
+		$h1 = $maxY - $minY;
+
+		// Get height of two lines
+		$rect = imagettfbbox($size, 0, $fontfile, "Tq\nTq");
+		$minY = min(array($rect[1],$rect[3],$rect[5],$rect[7]));
+		$maxY = max(array($rect[1],$rect[3],$rect[5],$rect[7])); 
+		$h2 = $maxY - $minY;
+
+		// amount of padding that should be between each line
+		$vpadding = $h2 - $h1 - $h1;
+
+		// calculate the dimensions of the text itself
+		$frect = imagettfbbox($size, 0, $fontfile, $text);
+		$minX = min(array($frect[0],$frect[2],$frect[4],$frect[6]));
+		$maxX = max(array($frect[0],$frect[2],$frect[4],$frect[6]));
+		$text_width = $maxX - $minX;
+
+		// left align any line whose whitespace accounts 
+		// for this much (percent) of the the line.
+		$max_whitespace_pct = 70;
+
+		$threshold = $text_width / 100 * $max_whitespace_pct;
+		$lines = explode("\n", $text);
+		foreach($lines as $line){
+			$rect = imagettfbbox($size, 0, $fontfile, $line);
+			$minX = min(array($rect[0],$rect[2],$rect[4],$rect[6]));
+			$maxX = max(array($rect[0],$rect[2],$rect[4],$rect[6]));
+			$minY = min(array($rect[1],$rect[3],$rect[5],$rect[7]));
+			$maxY = max(array($rect[1],$rect[3],$rect[5],$rect[7]));
+
+			$line_width = $maxX - $minX;
+			$line_height = $maxY - $minY; 
+
+			$words = explode(" ", $line);
+			$word_width = 0;
+			$word_data = array();
+			foreach($words as $word){
+				$rect = imagettfbbox($size, 0, $fontfile, $word);
+				$minX = min(array($rect[0],$rect[2],$rect[4],$rect[6]));
+				$maxX = max(array($rect[0],$rect[2],$rect[4],$rect[6]));
+				$width = $maxX - $minX;
+				$word_width += $width;
+				$word_data[] = array(
+					"width" => $width,
+					"word" => $word
+				);
+			}
+
+			$available_space = $text_width - $word_width;
+			$_x = $x;
+			if($threshold > $available_space && count($words) > 1){
+				$total_spaces = count($words) - 1;
+				$space_size = $available_space / $total_spaces;
+				foreach($word_data as $word){
+					imagettftext($image, $size, 0, $_x, $y, $color, $fontfile, $word['word']);
+					$_x += ($space_size + $word['width']);
+				}
+			}else{
+				imagettftext($image, $size, 0, $_x, $y, $color, $fontfile, $line);
+			}
+			$y += ($line_height + $vpadding);
+		}
+		return $frect;
+	}
+
+	/**
+	 * draw text to image with center alignment
+	 * @param resource $image - image resource from imagecreatetruecolor()
+	 * @param number $size - font size in points
+	 * @param number $x - x coord
+	 * @param number $y - y coord
+	 * @param number $color - color index from imagecolorallocate()
+	 * @param type $fontfile - path to a font file
+	 * @param type $text - the text to be drawn
+	 * @return type - an array representing the bounding box
+	 */
+	private static function imagettftextcenter($image, $size, $x, $y, $color, $fontfile, $text){
+		// Get height of single line
+		$rect = imagettfbbox($size, 0, $fontfile, "Tq");
+		$minY = min(array($rect[1],$rect[3],$rect[5],$rect[7]));
+		$maxY = max(array($rect[1],$rect[3],$rect[5],$rect[7])); 
+		$h1 = $maxY - $minY;
+
+		// Get height of two lines
+		$rect = imagettfbbox($size, 0, $fontfile, "Tq\nTq");
+		$minY = min(array($rect[1],$rect[3],$rect[5],$rect[7]));
+		$maxY = max(array($rect[1],$rect[3],$rect[5],$rect[7])); 
+		$h2 = $maxY - $minY;
+
+		// amount of padding that should be between each line
+		$vpadding = $h2 - $h1 - $h1;
+
+		// calculate the dimensions of the text itself
+		$frect = imagettfbbox($size, 0, $fontfile, $text);
+		$minX = min(array($frect[0],$frect[2],$frect[4],$frect[6]));
+		$maxX = max(array($frect[0],$frect[2],$frect[4],$frect[6]));
+		$text_width = $maxX - $minX;
+
+		$text = explode("\n", $text);
+		foreach($text as $txt){
+			$rect = imagettfbbox($size, 0, $fontfile, $txt);
+			$minX = min(array($rect[0],$rect[2],$rect[4],$rect[6]));
+			$maxX = max(array($rect[0],$rect[2],$rect[4],$rect[6]));
+			$minY = min(array($rect[1],$rect[3],$rect[5],$rect[7]));
+			$maxY = max(array($rect[1],$rect[3],$rect[5],$rect[7])); 
+
+			$width = $maxX - $minX;
+			$height = $maxY - $minY; 
+
+			$_x = $x + (($text_width - $width) / 2);
+
+			imagettftext($image, $size, 0, $_x, $y, $color, $fontfile, $txt);
+			$y += ($height + $vpadding);
+		}
+
+		return $frect;
+	}
+
+	/**
+	 * draw text to image with right alignment
+	 * @param resource $image - image resource from imagecreatetruecolor()
+	 * @param number $size - font size in points
+	 * @param number $x - x coord
+	 * @param number $y - y coord
+	 * @param number $color - color index from imagecolorallocate()
+	 * @param type $fontfile - path to a font file
+	 * @param type $text - the text to be drawn
+	 * @return type - an array representing the bounding box
+	 */
+	private static function imagettftextright($image, $size, $x, $y, $color, $fontfile, $text){
+		// Get height of single line
+		$rect = imagettfbbox($size, 0, $fontfile, "Tq");
+		$minY = min(array($rect[1],$rect[3],$rect[5],$rect[7]));
+		$maxY = max(array($rect[1],$rect[3],$rect[5],$rect[7])); 
+		$h1 = $maxY - $minY;
+
+		// Get height of two lines
+		$rect = imagettfbbox($size, 0, $fontfile, "Tq\nTq");
+		$minY = min(array($rect[1],$rect[3],$rect[5],$rect[7]));
+		$maxY = max(array($rect[1],$rect[3],$rect[5],$rect[7])); 
+		$h2 = $maxY - $minY;
+
+		// amount of padding that should be between each line
+		$vpadding = $h2 - $h1 - $h1;
+
+		// calculate the dimensions of the text itself
+		$frect = imagettfbbox($size, 0, $fontfile, $text);
+		$minX = min(array($frect[0],$frect[2],$frect[4],$frect[6]));
+		$maxX = max(array($frect[0],$frect[2],$frect[4],$frect[6]));
+		$text_width = $maxX - $minX; 
+
+		$text = explode("\n", $text);
+		foreach($text as $txt){
+			$rect = imagettfbbox($size, 0, $fontfile, $txt);
+			$minX = min(array($rect[0],$rect[2],$rect[4],$rect[6]));
+			$maxX = max(array($rect[0],$rect[2],$rect[4],$rect[6]));
+			$minY = min(array($rect[1],$rect[3],$rect[5],$rect[7]));
+			$maxY = max(array($rect[1],$rect[3],$rect[5],$rect[7])); 
+
+			$width = $maxX - $minX;
+			$height = $maxY - $minY; 
+
+			$_x = ($x + $text_width) - $width;
+
+			imagettftext($image, $size, 0, $_x, $y, $color, $fontfile, $txt);
+			$y += ($height + $vpadding);
+		}
+
+		return $frect;
+	}
 	
 	/**
 	 * Decode a gif file

@@ -7,6 +7,8 @@ ini_set("display_errors", "1");
 # get the class handy
 require("../../EasyImage.php");
 
+$version = "2.8";
+
 # relative path
 $here = realpath(dirname(__FILE__));
 
@@ -35,8 +37,8 @@ $colored = EasyImage::Create($htmlColored, array("font"=>$font))->resize(500, 10
 # drop the black one behind the colored one to make a shadow
 $image->addOverlay($colored, 4, 7);
 
-$text = "<span style='color: #0AC2FF; font-size: 100; padding:10;'>v2.7</span>";
-$textbg = "<span style='color: #000; font-size: 100; padding:10;'>v2.7</span>";
+$text = "<span style='color: #0AC2FF; font-size: 100; padding:10;'>v$version</span>";
+$textbg = "<span style='color: #000; font-size: 100; padding:10;'>v$version</span>";
 $beta = EasyImage::Create($textbg, array("font"=>$font))->resize(150, 25);
 $foreground = EasyImage::Create($text, array("font"=>$font))->resize(150, 25);
 $beta->addOverlay($foreground, 2, 3);
